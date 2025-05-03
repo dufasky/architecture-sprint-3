@@ -1,0 +1,637 @@
+Текущее монолитное решение:
+===
+Сиквенс:
+===
+
+@startuml
+title Smart Home System - Temperature Monitoring and Control Sequence
+
+actor "Home Owner" as user
+participant "Smart Home System" as system
+participant "PostgreSQL" as db
+participant "Temperature Sensors" as sensors
+
+== Temperature Monitoring ==
+
+sensors -> system: Send temperature reading
+activate system
+system -> db: Store temperature data
+deactivate system
+
+== Heating Control ==
+
+user -> system: View current temperature
+activate system
+system -> db: Get latest temperature
+db --> system: Return temperature
+system --> user: Display temperature
+deactivate system
+
+user -> system: Set target temperature
+activate system
+system -> db: Update target temperature
+db --> system: Confirm update
+system --> user: Acknowledge update
+deactivate system
+
+user -> system: Turn on heating
+activate system
+system -> db: Update heating status
+db --> system: Confirm update
+system --> user: Acknowledge command
+deactivate system
+@enduml
+
+===
+Описание тестов:
+===
+1. testGetHeatingSystem:
+Проверяет корректность получения информации о системе отопления по её ID через GET-запрос.
+- Проверяет получение информации о системе отопления по ID.
+- Создаёт объект, сохраняет его и проверяет ответ API.
+
+2. testUpdateHeatingSystem:
+Проверяет обновление параметров системы отопления через PUT-запрос.
+- Тестирует обновление системы отопления.
+- Отправляет DTO с новыми значениями и проверяет обновлённые данные.
+
+3. testTurnOn:
+Проверяет включение системы отопления через POST-запрос.
+-Проверяет включение системы отопления.
+-Убеждается, что после запроса система действительно включена.
+
+4. testTurnOff:
+Проверяет выключение системы отопления через POST-запрос.
+- Проверяет выключение системы отопления.
+- Аналогично, но проверяет состояние "выключено".
+
+5. testSetTargetTemperature:
+Проверяет установку новой целевой температуры через POST-запрос.
+- Тестирует установку целевой температуры.
+-Проверяет, что температура действительно изменилась.
+
+6. testGetCurrentTemperature:
+Проверяет получение текущей температуры системы через GET-запрос.
+-Проверяет получение текущей температуры системы.
+-Убеждается, что возвращается правильное значение.
+
+
+===
+C4 Context
+===
+
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Smart Home System - Context Diagram
+
+Person(user, "Home Owner", "A person who owns and manages their smart home")
+System(smart_home_system, "Smart Home System", "Monolithic application for heating control and temperature monitoring")
+SystemDb(postgres, "PostgreSQL Database", "Stores heating system and temperature sensor data")
+System_Ext(temperature_sensors, "Temperature Sensors", "Physical sensors installed in homes")
+
+Rel(user, smart_home_system, "Manages heating settings and views temperature data", "HTTPS")
+Rel(smart_home_system, postgres, "Reads and writes data", "JDBC")
+Rel(temperature_sensors, smart_home_system, "Sends temperature readings", "HTTP")
+@enduml
+
+
+
+
+
+----------
+ЦЕЛЕВОЕ РЕШЕНИЕ НА MSA
+----------
+
+===
+C1 Context
+===
+
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Системный контекст Smart Home SaaS
+
+'=== Акторы ===
+Person(admin, "Администратор", "Управляет настройками системы, добавляет пользователей, контролирует доступ")
+Person(user, "Пользователь", "Владелец умного дома, управляет устройствами через интерфейсы")
+Person(partner, "Партнер", "Производитель устройств, интегрирующий свои продукты в экосистему")
+
+'=== Основная система ===
+System(saas_system, "Smart Home SaaS", "Облачная платформа для управления умным домом:\n- Централизованное управление устройствами\n- Автоматизация сценариев\n- Анализ телеметрии")
+
+'=== Внешние системы ===
+System_Ext(mobile_app, "Мобильное приложение", "Официальное приложение для iOS/Android:\n- Просмотр состояния устройств\n- Управление в реальном времени\n- Push-уведомления")
+System_Ext(web_app, "Веб-интерфейс", "Административная панель:\n- Расширенные настройки\n- Конфигурация сценариев\n- Аналитика")
+System_Ext(partner_api, "API Партнеров", "REST API для производителей устройств:\n- Регистрация новых типов устройств\n- Загрузка firmware\n- Доступ к документации")
+System_Ext(devices, "IoT Устройства")
+
+
+'=== Взаимодействия ===
+Rel(user, mobile_app, "Управление", "HTTPS/WebSockets")
+Rel(user, web_app, "Конфигурация", "HTTPS")
+Rel(admin, web_app, "Администрирование", "HTTPS")
+Rel(partner, partner_api, "Интеграция устройств", "HTTPS/MQTT")
+Rel(mobile_app, saas_system, "Синхронизация данных", "gRPC/HTTPS")
+Rel(web_app, saas_system, "API запросы", "REST/HTTPS")
+Rel(partner_api, saas_system, "Обмен данными", "MQTT/HTTPS")
+Rel(saas_system, devices, "Взаимодействие", "MQTT/CoAP")
+@enduml
+
+Ключевые элементы:
+
+Акторы:
+    Администратор: Полный доступ ко всем функциям системы.
+    Пользователь: Основной потребитель сервиса.
+    Партнер: Внешний интегратор оборудования.
+
+Внешние системы:
+    Мобильное приложение: Основной интерфейс для пользователей.
+    Веб-интерфейс: Для сложной настройки.
+    API Партнеров: Шлюз для подключения сторонних устройств.
+
+Технологии:
+    gRPC для высоконагруженных запросов.
+    MQTT для работы с IoT-устройствами.
+
+
+
+
+
+
+4. Sequence Diagrams
+4.1. Добавление устройства партнера
+    plantuml
+    @startuml AddPartnerDevice
+    actor Партнер as partner
+    participant "API Партнеров" as api
+    participant "API Gateway" as gateway
+    participant "Device Service" as device
+    participant "Kafka" as kafka
+    database "PostgreSQL" as db
+
+    partner -> api: POST /devices (сериализованные данные)
+    api -> gateway: HTTPS (JWT)
+    gateway -> device: gRPC registerDevice()
+    device -> db: Сохранить метаданные
+    device -> kafka: Publish DeviceRegistered
+    kafka --> device: Ack
+    device --> gateway: 201 Created
+    gateway --> api: 201
+    api --> partner: Устройство зарегистрировано
+    @enduml
+
+
+
+
+4.2. Сценарий автоматизации
+    @startuml NightModeScenario
+    participant "Time Trigger" as time
+    participant "Automation Service" as auto
+    participant "Kafka" as kafka
+    participant "Auth Service" as auth
+    participant "Device Service" as device
+    participant "Notification Service" as notify
+
+    group Сценарий "Ночной режим"
+        time -> auto: Триггер 23:00
+        auto -> kafka: Subscribe to "automation.rules.night_mode"
+        kafka --> auto: Правила (JSON)
+        
+        auto -> auth: Проверить права (JWT)
+        auth --> auto: Успешно
+
+        alt Управление светом
+            auto -> device: Выключить свет (gRPC)
+            device --> auto: OK
+        else Ошибка
+            device --> auto: Error
+            auto -> notify: "Ошибка выключения света"
+        end
+
+        alt Управление термостатом
+            auto -> device: Установить 18°C (gRPC)
+            device --> auto: OK
+        else Ошибка
+            device --> auto: Error
+            auto -> notify: "Ошибка настройки термостата"
+        end
+
+        auto -> kafka: Publish "scenario.executed" {status: "success"}
+        kafka -> notify: Уведомление "Ночной режим активирован"
+    end
+    @enduml
+
+
+
+
+
+
+
+
+===
+C2 Containers
+===
+
+
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Контейнерная диаграмма Smart Home SaaS (C2 Level) с разделенными БД
+
+'=== Акторы ===
+Person(admin, "Администратор", "Полный доступ ко всем функциям системы")
+Person(user, "Пользователь", "Основной потребитель сервиса")
+Person(partner, "Партнер", "Внешний интегратор оборудования")
+
+'=== Контейнеры ===
+Container_Boundary(cloud, "Облачная платформа") {
+    Container(gateway, "API Gateway", "Kong/Spring Cloud Gateway", "Единая точка входа для всех API запросов\n- Маршрутизация\n- Аутентификация\n- Логирование")
+    
+    Container(auth_service, "Сервис аутентификации", "Spring Security/Keycloak", "Управление пользователями и правами доступа\n- JWT токены\n- OAuth2\n- RBAC")
+    
+    Container(device_service, "Сервис устройств", "Spring Boot", "Добавление и хранение устройств\n- Регистрация устройств\n- Метаданные\n- Состояния")
+    
+    Container(automation_service, "Сервис автоматизации", "Kotlin/Node.js", "Управление сценариями автоматизации\n- Триггеры\n- Действия\n- Расписания")
+    
+    Container(control_service, "Сервис управления", "Go", "Управление устройствами в реальном времени\n- Команды\n- Телеметрия\n- WebSockets")
+    
+    Container(notification_service, "Сервис уведомлений", "Node.js", "Отправка уведомлений пользователям\n- Email\n- Push\n- SMS")
+    
+    Container(event_bus, "Event Bus", "Apache Kafka", "Асинхронная коммуникация между сервисами\n- Топики устройств\n- События автоматизации\n- Уведомления")
+    
+    '=== Базы данных ===
+    ContainerDb(auth_db, "Auth Database", "PostgreSQL", "Хранение:\n- Учетные записи\n- Роли\n- Права доступа")
+    
+    ContainerDb(device_db, "Device Registry", "MongoDB", "Хранение:\n- Метаданные устройств\n- Конфигурации\n- Состояния")
+    
+    ContainerDb(automation_db, "Automation Storage", "PostgreSQL", "Хранение:\n- Сценарии\n- Триггеры\n- Журнал выполнения")
+    
+    ContainerDb(notification_db, "Notification Storage", "MongoDB", "Хранение:\n- Шаблоны уведомлений\n- Журнал отправки\n- Настройки пользователей")
+
+    ContainerDb(control_db, "Control Storage", "PostgreSQL", "Хранение:\n- Команды телеметрии")
+
+}
+
+'=== Внешние системы ===
+System_Ext(web_ui, "Web UI", "React/Angular", "Веб-интерфейс для пользователей и администраторов")
+System_Ext(partner_ui, "Partner Portal", "React", "Портал для партнеров с инструментами интеграции")
+System_Ext(mobile_app, "Mobile App", "Flutter/React Native", "Мобильное приложение для управления домом")
+System_Ext(devices, "IoT Устройства", "Various", "Физические устройства умного дома")
+
+'=== Взаимодействия ===
+' Пользовательские взаимодействия
+Rel(user, web_ui, "Использует", "HTTPS")
+Rel(user, mobile_app, "Использует", "HTTPS/WebSockets")
+Rel(admin, web_ui, "Администрирует", "HTTPS")
+Rel(partner, partner_ui, "Интегрирует устройства", "HTTPS")
+
+' UI взаимодействия с системой
+Rel(web_ui, gateway, "API запросы", "REST/HTTPS")
+Rel(mobile_app, gateway, "API запросы", "gRPC/HTTPS")
+Rel(partner_ui, gateway, "API запросы", "REST/HTTPS")
+
+' Взаимодействия через Gateway
+Rel(gateway, auth_service, "Проверка доступа", "JWT")
+Rel(gateway, device_service, "Запросы устройств", "REST")
+Rel(gateway, automation_service, "Управление сценариями", "REST")
+Rel(gateway, control_service, "Команды управления", "WebSockets")
+Rel(gateway, notification_service, "Отправка уведомлений", "REST")
+
+' Взаимодействие с устройствами
+Rel(control_service, devices, "Управление устройствами", "MQTT/CoAP")
+
+' Асинхронные взаимодействия через Kafka
+Rel(device_service, event_bus, "Публикует события устройств", "Kafka")
+Rel(control_service, event_bus, "Публикует телеметрию", "Kafka")
+Rel(event_bus, control_service, "Читает задачи на телеметрию", "Kafka")
+Rel(automation_service, event_bus, "Публикует события сценариев", "Kafka")
+Rel(event_bus, notification_service, "Подписка на события", "Kafka")
+Rel(event_bus, automation_service, "Подписка на триггеры", "Kafka")
+
+' Взаимодействия с БД
+Rel(auth_service, auth_db, "Чтение/запись пользователей", "JDBC")
+Rel(device_service, device_db, "Хранение метаданных", "MongoDB Driver")
+Rel(automation_service, automation_db, "Хранение сценариев", "JDBC")
+Rel(notification_service, notification_db, "Журнал уведомлений", "MongoDB Driver")
+Rel(control_service, control_db, "Команды телеметрии", "JDBC")
+@enduml
+
+
+
+
+
+
+
+
+
+
+
+===
+C3 Components
+=== 
+
+1. Сервис аутентификации (Auth Service)
+Назначение: Централизованное управление аутентификацией и авторизацией.
+Ключевые потоки:
+- Обработка входа/регистрации
+-Генерация JWT токенов
+-Проверка прав доступа (RBAC)
+
+
+2. Сервис устройств (Device Service)
+Назначение: Управление метаданными и жизненным циклом устройств.
+Ключевые потоки:
+- Регистрация новых устройств
+- Хранение метаданных
+- Публикация событий в Kafka
+
+
+
+3. Сервис автоматизации (Automation Service)
+Назначение: Выполнение правил автоматизации на основе событий.
+Особенности:
+- Только запись в Kafka (публикация триггеров)
+- Хранение сложных сценариев в PostgreSQL
+
+
+
+4. Сервис управления (Control Service)
+Назначение: Реальное взаимодействие с устройствами.
+Особенности:
+- WebSocket для управления в реальном времени
+- Поддержка MQTT/CoAP
+- Публикация телеметрии в Kafka
+
+
+
+5. Сервис уведомлений (Notification Service)
+Назначение: Мультиканальная система уведомлений.
+Ключевые функции:
+- Подписка на события Kafka
+- Шаблонизация сообщений
+- Поддержка разных каналов доставки
+
+
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Auth Service Components
+
+Component_Ext(gateway, "API Gateway", "Входящие запросы")
+Container_Boundary(auth_service, "Auth Service") {
+    Component(auth_controller, "Auth Controller", "REST API", "Обработка HTTP запросов")
+    Component(user_service, "User Service", "Логика пользователей", "Регистрация, управление профилями")
+    Component(role_service, "Role Service", "RBAC", "Управление ролями и правами")
+    Component(jwt_provider, "JWT Provider", "Генерация токенов", "Создание/верификация JWT")
+    Component(auth_db_adapter, "DB Adapter", "PostgreSQL", "Работа с auth_db")
+}
+
+Rel(gateway, auth_controller, "HTTP")
+Rel(auth_controller, user_service, "Вызов")
+Rel(auth_controller, jwt_provider, "Валидация")
+Rel(user_service, role_service, "Проверка прав")
+Rel(user_service, auth_db_adapter, "CRUD")
+Rel(role_service, auth_db_adapter, "Чтение прав")
+Rel(jwt_provider, auth_db_adapter, "Валидация ключей")
+
+
+
+
+title Device Service Components
+
+Component_Ext(gateway, "API Gateway")
+Container_Boundary(device_service, "Device Service") {
+    Component(device_controller, "Device API", "REST", "CRUD устройств")
+    Component(registry, "Device Registry", "Логика", "Управление жизненным циклом")
+    Component(state_manager, "State Manager", "Кэш состояний", "Текущие состояния устройств")
+    Component(provisioning, "Provisioning", "Подготовка", "Регистрация новых устройств")
+    Component(device_db_adapter, "DB Adapter", "MongoDB", "Работа с device_db")
+}
+
+Rel(gateway, device_controller, "HTTP")
+Rel(device_controller, registry, "Запросы")
+Rel(registry, state_manager, "Обновление")
+Rel(registry, device_db_adapter, "Сохранение")
+Rel(registry, provisioning, "Новые устройства")
+Rel(provisioning, event_bus, "События регистрации", "Kafka")
+Rel(state_manager, event_bus, "События состояний", "Kafka")
+
+
+
+
+title Control Service Components
+
+Component_Ext(devices, "IoT Устройства")
+Container_Boundary(control_service, "Control Service") {
+    Component(control_api, "Control API", "WebSocket", "Управление в реальном времени")
+    Component(command_processor, "Command Processor", "Обработка", "Трансляция команд")
+    Component(telemetry, "Telemetry", "Сбор данных", "Обработка телеметрии")
+    Component(protocol_adapter, "Protocol Adapter", "MQTT/CoAP", "Адаптер протоколов")
+    Component(control_db_adapter, "DB Adapter", "PostgreSQL", "Работа с control_db")
+
+}
+
+Rel(gateway, control_api, "WebSocket")
+Rel(control_api, command_processor, "Команды")
+Rel(command_processor, protocol_adapter, "Трансляция")
+Rel(protocol_adapter, devices, "Управление")
+Rel(devices, protocol_adapter, "Телеметрия")
+Rel(protocol_adapter, telemetry, "Данные")
+Rel(telemetry, event_bus, "Публикация", "Kafka")
+Rel(telemetry, control_db_adapter, "Сохранение/чтение")
+
+
+
+
+
+
+title Notification Service Components
+
+Container_Boundary(notification_service, "Notification Service") {
+    Component(event_processor, "Event Processor", "Обработка", "Анализ событий")
+    Component(delivery_gateway, "Delivery Gateway", "Доставка", "Email/Push/SMS")
+    Component(template_engine, "Template Engine", "Шаблоны", "Генерация сообщений")
+    Component(notification_db_adapter, "DB Adapter", "MongoDB", "Работа с notification_db")
+}
+
+Rel(gateway, notification_api, "HTTP")
+Rel(event_bus, event_processor, "Чтение событий")
+Rel(event_processor, template_engine, "Запрос шаблонов")
+Rel(template_engine, notification_db_adapter, "Загрузка")
+Rel(template_engine, delivery_gateway, "Сообщения")
+Rel(delivery_gateway, notification_db_adapter, "Логирование")
+
+
+
+
+title Automation Service Components
+
+Container_Boundary(automation_service, "Automation Service") {
+    Component(automation_api, "Automation API", "REST", "Управление сценариями")
+    Component(rule_engine, "Rule Engine", "Обработка", "Выполнение правил")
+    Component(scenario_manager, "Scenario Manager", "Хранение", "Управление сценариями")
+    Component(automation_db_adapter, "DB Adapter", "PostgreSQL", "Работа с automation_db")
+}
+
+Rel(gateway, automation_api, "HTTP")
+Rel(automation_api, scenario_manager, "CRUD")
+Rel(scenario_manager, automation_db_adapter, "Сохранение")
+Rel(event_bus, rule_engine, "Чтение событий")
+Rel(rule_engine, scenario_manager, "Загрузка правил")
+Rel(rule_engine, event_bus, "Публикация действий", "Kafka")
+@enduml
+
+
+
+
+===
+ERD:
+===
+
+1. Auth Service Database
+
+@startuml
+title Auth Service ERD (PostgreSQL)
+
+entity users {
+  * id
+  --
+  * username
+  * password_hash
+  * is_active
+}
+
+entity roles {
+  * id
+  --
+  * name
+}
+
+entity permissions {
+  * id
+  --
+  * code
+}
+
+entity user_roles {
+  * user_id
+  * role_id
+}
+
+entity role_permissions {
+  * role_id
+  * permission_id
+}
+
+users ||--o{ user_roles
+roles ||--o{ user_roles
+roles ||--o{ role_permissions
+permissions ||--o{ role_permissions
+@enduml
+
+
+
+
+
+2. Automation Service Database
+@startuml
+title Automation Service ERD (PostgreSQL)
+
+entity scenarios {
+  * id
+  --
+  * user_id
+  * is_active
+}
+
+entity triggers {
+  * id
+  --
+  * scenario_id
+  * type
+  * condition
+}
+
+entity actions {
+  * id
+  --
+  * scenario_id
+  * type
+  * target
+}
+
+scenarios ||--o{ triggers
+scenarios ||--o{ actions
+@enduml
+
+
+
+3. Control Service Database
+@startuml
+title Control Service ERD
+
+entity device {
+  * id
+  --
+  * protocol
+}
+
+entity command {
+  * id
+  --
+  * device_id
+  * command
+}
+
+entity telemetry {
+  * id
+  --
+  * device_id
+  * value
+}
+
+device ||--o{ command
+device ||--o{ telemetry
+@enduml
+
+
+
+4. Notification Service Database
+@startuml
+title Notification Service Schema
+
+class template {
+  * id
+  * content
+}
+
+class notification {
+  * id
+  * template_id
+  * recipient
+}
+@enduml
+
+
+5. Automation Service Database
+@startuml
+title Device Service Schema
+
+class device {
+  * id
+  * type
+}
+
+class state {
+  * device_id
+  * value
+}
+@enduml
+
